@@ -171,30 +171,16 @@ else()
     message(STATUS "Found nlohmann_json")
 endif()
 
-# MeCab for Japanese text processing (optional)
+# MeCab for Japanese text processing - compile from source
 if(USE_MECAB)
-    find_path(MECAB_INCLUDE_DIR mecab.h
-        PATHS
-            /usr/local/include
-            /usr/include
-            /opt/homebrew/include
-            C:/Program Files/MeCab/sdk
-    )
+    message(STATUS "Building MeCab from source...")
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/MeCab.cmake)
 
-    find_library(MECAB_LIBRARY
-        NAMES mecab libmecab
-        PATHS
-            /usr/local/lib
-            /usr/lib
-            /opt/homebrew/lib
-            C:/Program Files/MeCab/sdk
-    )
-
-    if(MECAB_INCLUDE_DIR AND MECAB_LIBRARY)
-        message(STATUS "Found MeCab: ${MECAB_LIBRARY}")
+    if(MECAB_LIBRARY)
+        message(STATUS "MeCab will be built from source")
         add_definitions(-DUSE_MECAB)
     else()
-        message(WARNING "MeCab not found, Japanese text segmentation will use fallback method")
+        message(WARNING "MeCab source not found, Japanese text segmentation will use fallback method")
         set(USE_MECAB OFF)
     endif()
 endif()
@@ -219,7 +205,7 @@ if(JSON_INCLUDE_DIR)
     include_directories(${JSON_INCLUDE_DIR})
 endif()
 
-if(USE_MECAB)
+if(USE_MECAB AND MECAB_INCLUDE_DIR)
     include_directories(${MECAB_INCLUDE_DIR})
 endif()
 
@@ -243,6 +229,7 @@ set(CORE_SOURCES
     # Tokenizer module
     src/tokenizer/ipa_tokenizer.cpp
     src/tokenizer/vocab_manager.cpp
+    src/tokenizer/mecab_wrapper.cpp
 
     # Audio module
     src/audio/audio_processor.cpp
@@ -273,6 +260,7 @@ set(CORE_HEADERS
     # Tokenizer module
     include/jp_edge_tts/tokenizer/ipa_tokenizer.h
     include/jp_edge_tts/tokenizer/vocab_manager.h
+    include/jp_edge_tts/tokenizer/mecab_wrapper.h
 
     # Audio module
     include/jp_edge_tts/audio/audio_processor.h
@@ -298,7 +286,7 @@ target_link_libraries(jp_edge_tts_core
         ${ONNXRUNTIME_LIBRARIES}
 )
 
-if(USE_MECAB)
+if(USE_MECAB AND MECAB_LIBRARY)
     target_link_libraries(jp_edge_tts_core PUBLIC ${MECAB_LIBRARY})
 endif()
 
