@@ -1,0 +1,3 @@
+[submodule ".github/DeepPhonemizer"]
+	path = .github/DeepPhonemizer
+	url = https://github.com/spring-media/DeepPhonemizer
