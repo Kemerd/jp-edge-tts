@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "description": "Japanese TTS voices for Kokoro",
+  "voices": {
+    "jf_alpha": {
+      "id": "jf_alpha",
+      "displayName": "\ud83d\udeba Alpha",
+      "languageCode": "ja-jp",
+      "gender": "female",
+      "filename": "jf_alpha.json"
+    },
+    "jf_gongitsune": {
+      "id": "jf_gongitsune",
+      "displayName": "\ud83d\udeba Gongitsune",
+      "languageCode": "ja-jp",
+      "gender": "female",
+      "filename": "jf_gongitsune.json"
+    },
+    "jf_nezumi": {
+      "id": "jf_nezumi",
+      "displayName": "\ud83d\udeba Nezumi",
+      "languageCode": "ja-jp",
+      "gender": "female",
+      "filename": "jf_nezumi.json"
+    },
+    "jf_tebukuro": {
+      "id": "jf_tebukuro",
+      "displayName": "\ud83d\udeba Tebukuro",
+      "languageCode": "ja-jp",
+      "gender": "female",
+      "filename": "jf_tebukuro.json"
+    },
+    "jm_kumo": {
+      "id": "jm_kumo",
+      "displayName": "\ud83d\udeb9 Kumo",
+      "languageCode": "ja-jp",
+      "gender": "male",
+      "filename": "jm_kumo.json"
+    }
+  }
+}
