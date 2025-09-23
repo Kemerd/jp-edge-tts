@@ -81,8 +81,16 @@ target_include_directories(mecab_static PUBLIC
 )
 
 # Export MeCab for use in main project
-set(MECAB_INCLUDE_DIR ${MECAB_SOURCE_DIR} PARENT_SCOPE)
-set(MECAB_LIBRARY mecab_static PARENT_SCOPE)
+set(MECAB_INCLUDE_DIR ${MECAB_SOURCE_DIR})
+set(MECAB_LIBRARY mecab_static)
+
+# Install MeCab library
+install(TARGETS mecab_static
+    EXPORT jp_edge_tts_targets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
 
 # Install MeCab headers
 install(FILES ${MECAB_SOURCE_DIR}/mecab.h
