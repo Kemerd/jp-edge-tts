@@ -1,0 +1,24 @@
+# Core dependencies for JP Edge TTS training
+streamlit>=1.28.0
+# TensorFlow 2.10.0 - last version with native Windows GPU support
+# For CUDA 11.2 support on Windows
+tensorflow==2.10.0
+# Fix protobuf compatibility issue (TF 2.10 needs <3.20)
+protobuf==3.19.6
+# Compatible numpy version for TF 2.10
+numpy==1.23.5
+pyaudio>=0.2.11
+sounddevice>=0.4.1
+scipy>=1.6.0
+librosa>=0.8.0
+resampy>=0.2.2
+matplotlib>=3.3.3
+tqdm>=4.54.1
+pandas>=1.2.0
+
+# Additional useful dependencies
+tf2onnx>=1.14.0  # For ONNX export
+mecab-python3>=1.0.5  # MeCab for Japanese text processing
+jaconv>=0.3  # Japanese character conversion
+fugashi>=1.2.0  # Alternative MeCab wrapper
+ipadic>=1.0.0  # Japanese dictionary for MeCab
