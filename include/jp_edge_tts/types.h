@@ -24,7 +24,9 @@ enum class Status {
     ERROR_FILE_NOT_FOUND,
     ERROR_UNSUPPORTED_FORMAT,
     ERROR_CACHE_MISS,
-    ERROR_TIMEOUT
+    ERROR_TIMEOUT,
+    ERROR_NOT_INITIALIZED,
+    ERROR_UNKNOWN
 };
 
 // Voice characteristics

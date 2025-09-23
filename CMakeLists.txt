@@ -102,7 +102,7 @@ endif()
 set(ONNXRUNTIME_ROOT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/.github/onnxruntime")
 
 # Build ONNX Runtime from source if submodule exists
-if(EXISTS "${ONNXRUNTIME_ROOT_PATH}/CMakeLists.txt")
+if(EXISTS "${ONNXRUNTIME_ROOT_PATH}/cmake/CMakeLists.txt")
     message(STATUS "Building ONNX Runtime from source...")
 
     # ONNX Runtime build options
@@ -120,7 +120,7 @@ if(EXISTS "${ONNXRUNTIME_ROOT_PATH}/CMakeLists.txt")
     set(onnxruntime_DISABLE_ML_OPS OFF CACHE BOOL "" FORCE)
 
     # Add ONNX Runtime as subdirectory
-    add_subdirectory(${ONNXRUNTIME_ROOT_PATH} onnxruntime EXCLUDE_FROM_ALL)
+    add_subdirectory(${ONNXRUNTIME_ROOT_PATH}/cmake onnxruntime EXCLUDE_FROM_ALL)
 
     # Set include directories
     set(ONNXRUNTIME_INCLUDE_DIRS
