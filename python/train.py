@@ -35,7 +35,7 @@ st.markdown("""
 <style>
     /* Modern Apple-style design with smooth animations */
     .stApp {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #2d2d30;
     }
     .main-header {
         font-size: 3rem;
@@ -70,6 +70,17 @@ st.markdown("""
     .stButton button:hover {
         transform: scale(1.05);
         box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+    }
+    /* Remove tab button backgrounds */
+    .stTabs [data-baseweb="tab-list"] button {
+        background: transparent !important;
+        border: none !important;
+        color: #ffffff !important;
+    }
+    .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
+        background: transparent !important;
+        border-bottom: 2px solid #667eea !important;
+        color: #667eea !important;
     }
     .training-progress {
         background: rgba(255, 255, 255, 0.95);

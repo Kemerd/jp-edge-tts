@@ -1,0 +1,53 @@
+# JP Edge TTS Config
+# Provides configuration for the JP Edge TTS library
+#
+# This file provides targets:
+#   jp_edge_tts::jp_edge_tts_core - Main TTS library
+#   jp_edge_tts::jp_edge_tts_c_api - C API wrapper
+#   jp_edge_tts::jp_tts_cli - Command line interface
+#
+# Variables set:
+#   JP_EDGE_TTS_VERSION
+#   JP_EDGE_TTS_INCLUDE_DIRS
+#   JP_EDGE_TTS_LIBRARIES
+#   JP_EDGE_TTS_FOUND
+
+@PACKAGE_INIT@
+
+# Version information
+set(JP_EDGE_TTS_VERSION "@JP_EDGE_TTS_VERSION@")
+
+# Include directories
+set(JP_EDGE_TTS_INCLUDE_DIRS "@PACKAGE_JP_EDGE_TTS_INCLUDE_DIRS@")
+
+# Find dependencies
+find_dependency(Threads REQUIRED)
+
+# ONNX Runtime
+if(@USE_ONNXRUNTIME@)
+    find_dependency(onnxruntime REQUIRED)
+endif()
+
+# MeCab (if enabled)
+if(@USE_MECAB@)
+    # MeCab is compiled from source, no external dependency needed
+endif()
+
+# nlohmann JSON
+find_dependency(nlohmann_json REQUIRED)
+
+# Include the exported targets
+include("${CMAKE_CURRENT_LIST_DIR}/JP_EDGE_TTSTargets.cmake")
+
+# Set libraries variable for compatibility
+set(JP_EDGE_TTS_LIBRARIES 
+    jp_edge_tts::jp_edge_tts_core
+    jp_edge_tts::jp_edge_tts_c_api
+)
+
+if(TARGET jp_edge_tts::jp_tts_cli)
+    list(APPEND JP_EDGE_TTS_LIBRARIES jp_edge_tts::jp_tts_cli)
+endif()
+
+# Check if all required components are available
+check_required_components(JP_EDGE_TTS)
