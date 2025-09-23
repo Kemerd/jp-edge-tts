@@ -1,6 +1,8 @@
 # JP Edge TTS 🎌 🔊
 
 A high-performance, cross-platform Japanese Text-to-Speech (TTS) engine using ONNX Runtime and DeepPhonemizer. Built for edge deployment with C++ core and FFI-compatible C API for language bindings.
+<img width="2074" height="1089" alt="image" src="https://github.com/user-attachments/assets/d8de5248-9eb6-4b3a-bec6-84be97e84651" />
+
 
 ## ✨ Features
 
