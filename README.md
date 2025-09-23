@@ -21,7 +21,8 @@ A high-performance, cross-platform Japanese Text-to-Speech (TTS) engine using ON
 ```
 Japanese Text → Segmentation → Phonemization → Tokenization → ONNX Inference → Audio Output
      ↓              ↓              ↓              ↓               ↓              ↓
-  [MeCab]    [DeepPhonemizer] [Dictionary]  [Vocabulary]   [Kokoro Model]   [WAV/PCM]
+  [MeCab]    [DeepPhonemizer]  [Phoneme      [Vocabulary]   [Kokoro Model]   [WAV/PCM]
+              (Dict/ML Model)]   Tokenizer]
 ```
 
 ## 📋 Prerequisites
