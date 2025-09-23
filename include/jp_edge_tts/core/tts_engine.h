@@ -1,8 +1,8 @@
 /**
  * @file tts_engine.h
  * @brief Main TTS Engine interface for Japanese text-to-speech synthesis
- * @author JP Edge TTS Project
- * @date 2024
+ * D Everett Hinton
+ * @date 2025
  *
  * @details This file contains the main TTSEngine class which provides
  * a comprehensive API for Japanese text-to-speech synthesis using

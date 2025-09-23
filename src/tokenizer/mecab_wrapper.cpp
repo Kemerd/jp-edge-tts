@@ -1,8 +1,8 @@
 /**
  * @file mecab_wrapper.cpp
  * @brief Implementation of MeCab wrapper for Japanese tokenization
- * @author JP Edge TTS Project
- * @date 2024
+ * D Everett Hinton
+ * @date 2025
  *
  * @copyright MIT License
  */

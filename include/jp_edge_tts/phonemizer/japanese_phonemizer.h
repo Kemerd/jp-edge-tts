@@ -1,8 +1,8 @@
 /**
  * @file phonemizer.h
  * @brief Japanese text to IPA phoneme conversion interface
- * @author JP Edge TTS Project
- * @date 2024
+ * D Everett Hinton
+ * @date 2025
  *
  * @details This file defines the JapanesePhonemizer class which handles
  * grapheme-to-phoneme (G2P) conversion for Japanese text using a hybrid

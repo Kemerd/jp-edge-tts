@@ -1,8 +1,8 @@
 /**
  * @file jp_edge_tts_c_api.h
  * @brief C API wrapper for JP Edge TTS - FFI compatible interface
- * @author JP Edge TTS Project
- * @date 2024
+ * D Everett Hinton
+ * @date 2025
  *
  * @details This header provides a pure C interface for the JP Edge TTS library,
  * suitable for FFI (Foreign Function Interface) usage from other languages

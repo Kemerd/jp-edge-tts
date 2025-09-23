@@ -1,8 +1,8 @@
 /**
  * @file main.cpp
  * @brief Command-line interface for JP Edge TTS
- * @author JP Edge TTS Project
- * @date 2024
+ * D Everett Hinton
+ * @date 2025
  *
  * @details A comprehensive CLI application for Japanese text-to-speech synthesis
  * supporting text input, JSON input, and various output options.

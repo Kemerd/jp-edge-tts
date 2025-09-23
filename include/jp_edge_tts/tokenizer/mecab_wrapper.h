@@ -1,8 +1,8 @@
 /**
  * @file mecab_wrapper.h
  * @brief MeCab wrapper for Japanese text segmentation and tokenization
- * @author JP Edge TTS Project
- * @date 2024
+ * D Everett Hinton
+ * @date 2025
  *
  * @details Provides a C++ wrapper around MeCab for Japanese morphological
  * analysis, word segmentation, and reading generation. This tokenizer is
