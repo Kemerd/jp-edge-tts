@@ -76,8 +76,10 @@ set_target_properties(mecab_static PROPERTIES
 )
 
 # Include directories
-target_include_directories(mecab_static PUBLIC
-    ${MECAB_SOURCE_DIR}
+target_include_directories(mecab_static
+    PUBLIC
+        $<BUILD_INTERFACE:${MECAB_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/jp_edge_tts/third_party>
 )
 
 # Export MeCab for use in main project
