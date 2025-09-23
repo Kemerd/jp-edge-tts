@@ -227,32 +227,66 @@ endif()
 # Core Library
 # ==========================================
 
-# Source files
+# Source files - matching header organization
 set(CORE_SOURCES
+    # Core module
     src/core/tts_engine.cpp
     src/core/session_manager.cpp
     src/core/voice_manager.cpp
     src/core/cache_manager.cpp
+
+    # Phonemizer module
     src/phonemizer/japanese_phonemizer.cpp
     src/phonemizer/dictionary_lookup.cpp
     src/phonemizer/phonemizer_onnx.cpp
+
+    # Tokenizer module
     src/tokenizer/ipa_tokenizer.cpp
     src/tokenizer/vocab_manager.cpp
+
+    # Audio module
     src/audio/audio_processor.cpp
     src/audio/wav_writer.cpp
+
+    # Utilities
     src/utils/string_utils.cpp
     src/utils/file_utils.cpp
     src/utils/thread_pool.cpp
+
+    # C API wrapper
+    src/c_api/jp_edge_tts_c_api.cpp
 )
 
-# Header files
+# Header files - organized by module
 set(CORE_HEADERS
-    include/jp_edge_tts/tts_engine.h
-    include/jp_edge_tts/phonemizer.h
-    include/jp_edge_tts/tokenizer.h
-    include/jp_edge_tts/audio_processor.h
+    # Core module
+    include/jp_edge_tts/core/tts_engine.h
+    include/jp_edge_tts/core/session_manager.h
+    include/jp_edge_tts/core/voice_manager.h
+    include/jp_edge_tts/core/cache_manager.h
+
+    # Phonemizer module
+    include/jp_edge_tts/phonemizer/japanese_phonemizer.h
+    include/jp_edge_tts/phonemizer/dictionary_lookup.h
+    include/jp_edge_tts/phonemizer/phonemizer_onnx.h
+
+    # Tokenizer module
+    include/jp_edge_tts/tokenizer/ipa_tokenizer.h
+    include/jp_edge_tts/tokenizer/vocab_manager.h
+
+    # Audio module
+    include/jp_edge_tts/audio/audio_processor.h
+    include/jp_edge_tts/audio/wav_writer.h
+
+    # Utilities
+    include/jp_edge_tts/utils/string_utils.h
+    include/jp_edge_tts/utils/file_utils.h
+    include/jp_edge_tts/utils/thread_pool.h
+
+    # Common headers
     include/jp_edge_tts/types.h
     include/jp_edge_tts/config.h
+    include/jp_edge_tts/jp_edge_tts_c_api.h
 )
 
 # Create the core library
