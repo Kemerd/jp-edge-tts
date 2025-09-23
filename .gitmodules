@@ -1,3 +1,6 @@
 [submodule ".github/DeepPhonemizer"]
 	path = .github/DeepPhonemizer
 	url = https://github.com/spring-media/DeepPhonemizer
+[submodule ".github/onnxruntime"]
+	path = .github/onnxruntime
+	url = https://github.com/microsoft/onnxruntime
