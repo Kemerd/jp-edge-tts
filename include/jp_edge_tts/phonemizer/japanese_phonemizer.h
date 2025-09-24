@@ -14,7 +14,7 @@
 #ifndef JP_EDGE_TTS_PHONEMIZER_H
 #define JP_EDGE_TTS_PHONEMIZER_H
 
-#include "types.h"
+#include "jp_edge_tts/types.h"
 #include <unordered_map>
 #include <memory>
 #include <optional>

@@ -8,6 +8,7 @@
  */
 
 #include "jp_edge_tts/audio/audio_processor.h"
+#include "jp_edge_tts/audio/wav_writer.h"
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -26,11 +27,10 @@ namespace jp_edge_tts {
 
 class AudioProcessor::Impl {
 public:
-    // Default parameters
-    int default_sample_rate = 22050;
-    float default_volume = 1.0f;
-    
-    // Window functions for spectral processing
+    int sample_rate;
+
+    Impl(int sample_rate) : sample_rate(sample_rate) {}
+
     std::vector<float> CreateHannWindow(size_t size) {
         std::vector<float> window(size);
         for (size_t i = 0; i < size; i++) {
@@ -38,57 +38,33 @@ public:
         }
         return window;
     }
-    
-    std::vector<float> CreateHammingWindow(size_t size) {
-        std::vector<float> window(size);
-        for (size_t i = 0; i < size; i++) {
-            window[i] = 0.54f - 0.46f * std::cos(2.0f * M_PI * i / (size - 1));
+
+    float LinearInterpolate(float a, float b, float t) {
+        return a + t * (b - a);
+    }
+
+    std::vector<float> SimpleResample(const std::vector<float>& samples, int from_rate, int to_rate) {
+        if (from_rate == to_rate) {
+            return samples;
         }
-        return window;
-    }
-    
-    // Linear interpolation for resampling
-    float LinearInterpolate(float y1, float y2, float mu) {
-        return y1 * (1.0f - mu) + y2 * mu;
-    }
-    
-    // Cubic interpolation for higher quality resampling
-    float CubicInterpolate(float y0, float y1, float y2, float y3, float mu) {
-        float mu2 = mu * mu;
-        float a0 = y3 - y2 - y0 + y1;
-        float a1 = y0 - y1 - a0;
-        float a2 = y2 - y0;
-        float a3 = y1;
-        
-        return a0 * mu * mu2 + a1 * mu2 + a2 * mu + a3;
-    }
-    
-    // Apply pre-emphasis filter
-    std::vector<float> ApplyPreEmphasis(const std::vector<float>& audio, float coefficient) {
-        if (audio.empty()) return audio;
-        
-        std::vector<float> result(audio.size());
-        result[0] = audio[0];
-        
-        for (size_t i = 1; i < audio.size(); i++) {
-            result[i] = audio[i] - coefficient * audio[i - 1];
+
+        double ratio = static_cast<double>(to_rate) / from_rate;
+        size_t new_size = static_cast<size_t>(samples.size() * ratio);
+        std::vector<float> output(new_size);
+
+        for (size_t i = 0; i < new_size; i++) {
+            double src_index = i / ratio;
+            size_t index = static_cast<size_t>(src_index);
+
+            if (index + 1 < samples.size()) {
+                float t = src_index - index;
+                output[i] = LinearInterpolate(samples[index], samples[index + 1], t);
+            } else {
+                output[i] = samples[std::min(index, samples.size() - 1)];
+            }
         }
-        
-        return result;
-    }
-    
-    // Remove pre-emphasis (de-emphasis)
-    std::vector<float> RemovePreEmphasis(const std::vector<float>& audio, float coefficient) {
-        if (audio.empty()) return audio;
-        
-        std::vector<float> result(audio.size());
-        result[0] = audio[0];
-        
-        for (size_t i = 1; i < audio.size(); i++) {
-            result[i] = audio[i] + coefficient * result[i - 1];
-        }
-        
-        return result;
+
+        return output;
     }
 };
 
@@ -96,434 +72,244 @@ public:
 // Public Interface Implementation
 // ==========================================
 
-AudioProcessor::AudioProcessor() : pImpl(std::make_unique<Impl>()) {}
+AudioProcessor::AudioProcessor(int sample_rate)
+    : pImpl(std::make_unique<Impl>(sample_rate)) {}
+
 AudioProcessor::~AudioProcessor() = default;
 AudioProcessor::AudioProcessor(AudioProcessor&&) noexcept = default;
 AudioProcessor& AudioProcessor::operator=(AudioProcessor&&) noexcept = default;
 
-std::vector<float> AudioProcessor::Normalize(
-    const std::vector<float>& audio,
-    float target_level,
-    bool prevent_clipping) {
-    
-    if (audio.empty()) {
-        return audio;
+std::vector<float> AudioProcessor::ProcessAudio(
+    const std::vector<float>& samples,
+    float volume,
+    bool normalize) {
+
+    std::vector<float> result = samples;
+
+    // Apply volume
+    if (volume != 1.0f) {
+        result = ApplyVolume(result, volume);
     }
-    
-    // Find maximum absolute value
-    float max_abs = 0.0f;
-    for (float sample : audio) {
-        max_abs = std::max(max_abs, std::abs(sample));
+
+    // Apply normalization
+    if (normalize) {
+        result = Normalize(result);
     }
-    
-    // Avoid division by zero
-    if (max_abs == 0.0f) {
-        return audio;
-    }
-    
-    // Calculate scaling factor
-    float scale = target_level / max_abs;
-    
-    // Apply scaling
-    std::vector<float> result(audio.size());
-    for (size_t i = 0; i < audio.size(); i++) {
-        result[i] = audio[i] * scale;
-        
-        // Prevent clipping if requested
-        if (prevent_clipping) {
-            result[i] = std::max(-1.0f, std::min(1.0f, result[i]));
-        }
-    }
-    
+
     return result;
 }
 
-std::vector<float> AudioProcessor::ApplyVolume(
-    const std::vector<float>& audio,
-    float volume) {
-    
-    if (audio.empty() || volume == 1.0f) {
-        return audio;
+std::vector<float> AudioProcessor::Normalize(const std::vector<float>& samples) {
+    if (samples.empty()) {
+        return samples;
     }
-    
-    std::vector<float> result(audio.size());
-    
-    for (size_t i = 0; i < audio.size(); i++) {
-        result[i] = audio[i] * volume;
-        // Soft clipping to prevent harsh distortion
-        if (result[i] > 1.0f) {
-            result[i] = std::tanh(result[i]);
-        } else if (result[i] < -1.0f) {
-            result[i] = std::tanh(result[i]);
-        }
+
+    // Find peak amplitude
+    float peak = 0.0f;
+    for (float sample : samples) {
+        peak = std::max(peak, std::abs(sample));
     }
-    
+
+    if (peak == 0.0f) {
+        return samples;
+    }
+
+    // Normalize to 0.95 to prevent clipping
+    float scale = 0.95f / peak;
+    std::vector<float> result(samples.size());
+
+    for (size_t i = 0; i < samples.size(); i++) {
+        result[i] = samples[i] * scale;
+    }
+
     return result;
 }
 
-std::vector<float> AudioProcessor::Resample(
-    const std::vector<float>& audio,
-    int original_rate,
-    int target_rate,
-    ResampleQuality quality) {
-    
-    if (audio.empty() || original_rate == target_rate) {
-        return audio;
+std::vector<float> AudioProcessor::ApplyVolume(const std::vector<float>& samples, float volume) {
+    std::vector<float> result(samples.size());
+
+    for (size_t i = 0; i < samples.size(); i++) {
+        result[i] = samples[i] * volume;
     }
-    
-    // Calculate resampling ratio
-    double ratio = static_cast<double>(original_rate) / target_rate;
-    size_t new_length = static_cast<size_t>(audio.size() / ratio);
-    
-    std::vector<float> result(new_length);
-    
-    if (quality == ResampleQuality::LOW) {
-        // Nearest neighbor (fastest, lowest quality)
-        for (size_t i = 0; i < new_length; i++) {
-            size_t src_idx = static_cast<size_t>(i * ratio);
-            src_idx = std::min(src_idx, audio.size() - 1);
-            result[i] = audio[src_idx];
+
+    return result;
+}
+
+std::vector<float> AudioProcessor::TrimSilence(const std::vector<float>& samples, float threshold) {
+    if (samples.empty()) {
+        return samples;
+    }
+
+    // Find start of audio (first sample above threshold)
+    size_t start = 0;
+    for (size_t i = 0; i < samples.size(); i++) {
+        if (std::abs(samples[i]) > threshold) {
+            start = i;
+            break;
         }
-    } else if (quality == ResampleQuality::MEDIUM) {
-        // Linear interpolation
-        for (size_t i = 0; i < new_length; i++) {
-            double src_pos = i * ratio;
-            size_t src_idx = static_cast<size_t>(src_pos);
-            double mu = src_pos - src_idx;
-            
-            if (src_idx + 1 < audio.size()) {
-                result[i] = pImpl->LinearInterpolate(audio[src_idx], audio[src_idx + 1], mu);
-            } else {
-                result[i] = audio[src_idx];
-            }
+    }
+
+    // Find end of audio (last sample above threshold)
+    size_t end = samples.size() - 1;
+    for (size_t i = samples.size() - 1; i > start; i--) {
+        if (std::abs(samples[i]) > threshold) {
+            end = i;
+            break;
         }
+    }
+
+    // Return trimmed samples
+    if (end > start) {
+        return std::vector<float>(samples.begin() + start, samples.begin() + end + 1);
+    }
+
+    return samples;
+}
+
+std::vector<float> AudioProcessor::ApplyFade(const std::vector<float>& samples, int fade_ms) {
+    if (samples.empty() || fade_ms <= 0) {
+        return samples;
+    }
+
+    std::vector<float> result = samples;
+    size_t fade_samples = static_cast<size_t>((fade_ms * pImpl->sample_rate) / 1000);
+    fade_samples = std::min(fade_samples, samples.size() / 2);
+
+    // Fade in
+    for (size_t i = 0; i < fade_samples && i < result.size(); i++) {
+        float factor = static_cast<float>(i) / fade_samples;
+        result[i] *= factor;
+    }
+
+    // Fade out
+    for (size_t i = 0; i < fade_samples && i < result.size(); i++) {
+        size_t index = result.size() - 1 - i;
+        float factor = static_cast<float>(i) / fade_samples;
+        result[index] *= factor;
+    }
+
+    return result;
+}
+
+std::vector<float> AudioProcessor::Resample(const std::vector<float>& samples,
+                                            int from_rate,
+                                            int to_rate) {
+    return pImpl->SimpleResample(samples, from_rate, to_rate);
+}
+
+std::vector<int16_t> AudioProcessor::ToPCM16(const std::vector<float>& samples) {
+    std::vector<int16_t> result(samples.size());
+
+    for (size_t i = 0; i < samples.size(); i++) {
+        float clamped = std::max(-1.0f, std::min(1.0f, samples[i]));
+        result[i] = static_cast<int16_t>(clamped * 32767.0f);
+    }
+
+    return result;
+}
+
+std::vector<float> AudioProcessor::FromPCM16(const std::vector<int16_t>& pcm) {
+    std::vector<float> result(pcm.size());
+
+    for (size_t i = 0; i < pcm.size(); i++) {
+        result[i] = static_cast<float>(pcm[i]) / 32767.0f;
+    }
+
+    return result;
+}
+
+Status AudioProcessor::SaveToFile(const AudioData& audio,
+                                  const std::string& filepath,
+                                  AudioFormat format) {
+    // Convert float samples to PCM16 for WAV writing
+    auto pcm_samples = ToPCM16(audio.samples);
+
+    bool success = false;
+    if (format == AudioFormat::WAV_PCM16) {
+        success = WAVWriter::WritePCM16(filepath, pcm_samples, audio.sample_rate, audio.channels);
     } else {
-        // Cubic interpolation (best quality)
-        for (size_t i = 0; i < new_length; i++) {
-            double src_pos = i * ratio;
-            size_t src_idx = static_cast<size_t>(src_pos);
-            double mu = src_pos - src_idx;
-            
-            // Get four points for cubic interpolation
-            float y0 = (src_idx > 0) ? audio[src_idx - 1] : audio[src_idx];
-            float y1 = audio[src_idx];
-            float y2 = (src_idx + 1 < audio.size()) ? audio[src_idx + 1] : audio[src_idx];
-            float y3 = (src_idx + 2 < audio.size()) ? audio[src_idx + 2] : y2;
-            
-            result[i] = pImpl->CubicInterpolate(y0, y1, y2, y3, mu);
-        }
+        success = WAVWriter::WriteFloat(filepath, audio.samples, audio.sample_rate, audio.channels, 16);
     }
-    
+
+    return success ? Status::OK : Status::ERROR_IO;
+}
+
+AudioData AudioProcessor::LoadFromFile(const std::string& filepath) {
+    AudioData result;
+
+    // Use WAVWriter to read the file
+    bool success = WAVWriter::ReadWav(filepath, result.samples, result.sample_rate, result.channels);
+
+    if (!success) {
+        result.samples.clear();
+        result.sample_rate = 0;
+        result.channels = 0;
+    }
+
     return result;
 }
 
-std::vector<float> AudioProcessor::ChangePitch(
-    const std::vector<float>& audio,
-    float pitch_factor,
-    int sample_rate) {
-    
-    if (audio.empty() || pitch_factor == 1.0f) {
-        return audio;
+std::vector<uint8_t> AudioProcessor::ToWavBytes(const AudioData& audio, AudioFormat format) {
+    if (format == AudioFormat::WAV_PCM16) {
+        auto pcm_samples = ToPCM16(audio.samples);
+        return WAVWriter::CreateWavBytes(pcm_samples, audio.sample_rate, audio.channels);
+    } else {
+        return WAVWriter::CreateWavBytesFloat(audio.samples, audio.sample_rate, audio.channels, 32);
     }
-    
-    // Simple pitch shifting using resampling
-    // Note: This changes duration. For pitch shift without duration change,
-    // we would need PSOLA or phase vocoder
-    
-    int new_rate = static_cast<int>(sample_rate * pitch_factor);
-    return Resample(audio, new_rate, sample_rate, ResampleQuality::HIGH);
 }
 
-std::vector<float> AudioProcessor::ChangeSpeed(
-    const std::vector<float>& audio,
-    float speed_factor) {
-    
-    if (audio.empty() || speed_factor == 1.0f) {
-        return audio;
+float AudioProcessor::GetRMS(const std::vector<float>& samples) {
+    if (samples.empty()) {
+        return 0.0f;
     }
-    
-    // Speed change by resampling
-    size_t new_length = static_cast<size_t>(audio.size() / speed_factor);
-    std::vector<float> result(new_length);
-    
-    for (size_t i = 0; i < new_length; i++) {
-        float src_pos = i * speed_factor;
-        size_t src_idx = static_cast<size_t>(src_pos);
-        float mu = src_pos - src_idx;
-        
-        if (src_idx + 1 < audio.size()) {
-            result[i] = pImpl->LinearInterpolate(audio[src_idx], audio[src_idx + 1], mu);
-        } else if (src_idx < audio.size()) {
-            result[i] = audio[src_idx];
-        } else {
-            result[i] = 0.0f;
-        }
-    }
-    
-    return result;
-}
 
-std::vector<float> AudioProcessor::ApplyFadeIn(
-    const std::vector<float>& audio,
-    float duration_seconds,
-    int sample_rate) {
-    
-    if (audio.empty() || duration_seconds <= 0) {
-        return audio;
-    }
-    
-    size_t fade_samples = static_cast<size_t>(duration_seconds * sample_rate);
-    fade_samples = std::min(fade_samples, audio.size());
-    
-    std::vector<float> result = audio;
-    
-    for (size_t i = 0; i < fade_samples; i++) {
-        float fade_factor = static_cast<float>(i) / fade_samples;
-        result[i] *= fade_factor;
-    }
-    
-    return result;
-}
-
-std::vector<float> AudioProcessor::ApplyFadeOut(
-    const std::vector<float>& audio,
-    float duration_seconds,
-    int sample_rate) {
-    
-    if (audio.empty() || duration_seconds <= 0) {
-        return audio;
-    }
-    
-    size_t fade_samples = static_cast<size_t>(duration_seconds * sample_rate);
-    fade_samples = std::min(fade_samples, audio.size());
-    
-    std::vector<float> result = audio;
-    size_t start_idx = audio.size() - fade_samples;
-    
-    for (size_t i = 0; i < fade_samples; i++) {
-        float fade_factor = 1.0f - (static_cast<float>(i) / fade_samples);
-        result[start_idx + i] *= fade_factor;
-    }
-    
-    return result;
-}
-
-std::vector<float> AudioProcessor::Concatenate(
-    const std::vector<std::vector<float>>& audio_segments,
-    float gap_seconds,
-    int sample_rate) {
-    
-    if (audio_segments.empty()) {
-        return {};
-    }
-    
-    // Calculate total size
-    size_t gap_samples = static_cast<size_t>(gap_seconds * sample_rate);
-    size_t total_size = 0;
-    
-    for (const auto& segment : audio_segments) {
-        total_size += segment.size();
-    }
-    total_size += gap_samples * (audio_segments.size() - 1);
-    
-    // Concatenate with gaps
-    std::vector<float> result;
-    result.reserve(total_size);
-    
-    for (size_t i = 0; i < audio_segments.size(); i++) {
-        // Add segment
-        result.insert(result.end(), audio_segments[i].begin(), audio_segments[i].end());
-        
-        // Add gap (silence) between segments
-        if (i < audio_segments.size() - 1) {
-            result.insert(result.end(), gap_samples, 0.0f);
-        }
-    }
-    
-    return result;
-}
-
-std::vector<float> AudioProcessor::Mix(
-    const std::vector<float>& audio1,
-    const std::vector<float>& audio2,
-    float mix_ratio) {
-    
-    if (audio1.empty()) return audio2;
-    if (audio2.empty()) return audio1;
-    
-    // Ensure mix ratio is in valid range
-    mix_ratio = std::max(0.0f, std::min(1.0f, mix_ratio));
-    
-    size_t max_length = std::max(audio1.size(), audio2.size());
-    std::vector<float> result(max_length);
-    
-    for (size_t i = 0; i < max_length; i++) {
-        float sample1 = (i < audio1.size()) ? audio1[i] : 0.0f;
-        float sample2 = (i < audio2.size()) ? audio2[i] : 0.0f;
-        
-        result[i] = sample1 * (1.0f - mix_ratio) + sample2 * mix_ratio;
-    }
-    
-    return result;
-}
-
-std::vector<float> AudioProcessor::RemoveSilence(
-    const std::vector<float>& audio,
-    float threshold,
-    int sample_rate) {
-    
-    if (audio.empty()) {
-        return audio;
-    }
-    
-    // Find first non-silent sample
-    size_t start_idx = 0;
-    for (size_t i = 0; i < audio.size(); i++) {
-        if (std::abs(audio[i]) > threshold) {
-            start_idx = i;
-            break;
-        }
-    }
-    
-    // Find last non-silent sample
-    size_t end_idx = audio.size() - 1;
-    for (size_t i = audio.size() - 1; i > start_idx; i--) {
-        if (std::abs(audio[i]) > threshold) {
-            end_idx = i;
-            break;
-        }
-    }
-    
-    // Extract non-silent portion
-    if (start_idx < end_idx) {
-        return std::vector<float>(audio.begin() + start_idx, audio.begin() + end_idx + 1);
-    }
-    
-    return audio;
-}
-
-std::vector<float> AudioProcessor::AddNoise(
-    const std::vector<float>& audio,
-    float noise_level,
-    NoiseType type) {
-    
-    if (audio.empty() || noise_level <= 0) {
-        return audio;
-    }
-    
-    std::vector<float> result = audio;
-    
-    // Simple random number generator for noise
-    unsigned int seed = 42;
-    auto rand_float = [&seed]() -> float {
-        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-        return (seed / (float)0x7fffffff) * 2.0f - 1.0f;
-    };
-    
-    if (type == NoiseType::WHITE) {
-        // White noise: random values
-        for (size_t i = 0; i < audio.size(); i++) {
-            result[i] += rand_float() * noise_level;
-        }
-    } else if (type == NoiseType::PINK) {
-        // Simplified pink noise using running average
-        float b0 = 0.0f, b1 = 0.0f, b2 = 0.0f;
-        
-        for (size_t i = 0; i < audio.size(); i++) {
-            float white = rand_float();
-            b0 = 0.99886f * b0 + white * 0.0555179f;
-            b1 = 0.99332f * b1 + white * 0.0750759f;
-            b2 = 0.96900f * b2 + white * 0.1538520f;
-            float pink = (b0 + b1 + b2 + white * 0.5362f) * 0.2f;
-            result[i] += pink * noise_level;
-        }
-    }
-    
-    return result;
-}
-
-std::vector<float> AudioProcessor::ConvertToMono(
-    const std::vector<float>& stereo_audio) {
-    
-    if (stereo_audio.size() < 2) {
-        return stereo_audio;
-    }
-    
-    // Assume interleaved stereo: L, R, L, R, ...
-    size_t mono_length = stereo_audio.size() / 2;
-    std::vector<float> mono(mono_length);
-    
-    for (size_t i = 0; i < mono_length; i++) {
-        float left = stereo_audio[i * 2];
-        float right = stereo_audio[i * 2 + 1];
-        mono[i] = (left + right) * 0.5f;
-    }
-    
-    return mono;
-}
-
-std::vector<float> AudioProcessor::ConvertToStereo(
-    const std::vector<float>& mono_audio,
-    float pan) {
-    
-    if (mono_audio.empty()) {
-        return mono_audio;
-    }
-    
-    // Ensure pan is in valid range [-1, 1]
-    pan = std::max(-1.0f, std::min(1.0f, pan));
-    
-    // Calculate left and right gains
-    float left_gain = (pan <= 0) ? 1.0f : 1.0f - pan;
-    float right_gain = (pan >= 0) ? 1.0f : 1.0f + pan;
-    
-    // Create interleaved stereo
-    std::vector<float> stereo(mono_audio.size() * 2);
-    
-    for (size_t i = 0; i < mono_audio.size(); i++) {
-        stereo[i * 2] = mono_audio[i] * left_gain;      // Left channel
-        stereo[i * 2 + 1] = mono_audio[i] * right_gain;  // Right channel
-    }
-    
-    return stereo;
-}
-
-AudioInfo AudioProcessor::AnalyzeAudio(const std::vector<float>& audio, int sample_rate) {
-    AudioInfo info;
-    info.sample_count = audio.size();
-    info.duration_seconds = static_cast<float>(audio.size()) / sample_rate;
-    info.sample_rate = sample_rate;
-    
-    if (audio.empty()) {
-        return info;
-    }
-    
-    // Calculate statistics
-    float sum = 0.0f;
-    info.peak_amplitude = 0.0f;
-    info.min_value = audio[0];
-    info.max_value = audio[0];
-    
-    for (float sample : audio) {
-        sum += std::abs(sample);
-        info.peak_amplitude = std::max(info.peak_amplitude, std::abs(sample));
-        info.min_value = std::min(info.min_value, sample);
-        info.max_value = std::max(info.max_value, sample);
-    }
-    
-    info.average_amplitude = sum / audio.size();
-    
-    // Calculate RMS (Root Mean Square)
     float sum_squares = 0.0f;
-    for (float sample : audio) {
+    for (float sample : samples) {
         sum_squares += sample * sample;
     }
-    info.rms = std::sqrt(sum_squares / audio.size());
-    
-    // Estimate if clipping occurred
-    info.is_clipped = (info.peak_amplitude >= 0.99f);
-    
-    return info;
+
+    return std::sqrt(sum_squares / samples.size());
+}
+
+float AudioProcessor::GetPeakLevel(const std::vector<float>& samples) {
+    if (samples.empty()) {
+        return 0.0f;
+    }
+
+    float peak = 0.0f;
+    for (float sample : samples) {
+        peak = std::max(peak, std::abs(sample));
+    }
+
+    return peak;
+}
+
+std::vector<float> AudioProcessor::ApplyPitchShift(const std::vector<float>& samples,
+                                                   float pitch_factor) {
+    // Simple pitch shift using time-domain PSOLA-like approach
+    // For a real implementation, this would use more sophisticated algorithms
+
+    if (pitch_factor == 1.0f) {
+        return samples;
+    }
+
+    // Simple approach: resample and then time-stretch to maintain duration
+    int new_rate = static_cast<int>(pImpl->sample_rate / pitch_factor);
+    auto resampled = Resample(samples, pImpl->sample_rate, new_rate);
+
+    // Time-stretch back to original length
+    return Resample(resampled, new_rate, pImpl->sample_rate);
+}
+
+std::vector<float> AudioProcessor::ApplySpeedChange(const std::vector<float>& samples,
+                                                    float speed_factor) {
+    if (speed_factor == 1.0f) {
+        return samples;
+    }
+
+    // Speed change by resampling
+    int new_rate = static_cast<int>(pImpl->sample_rate * speed_factor);
+    return Resample(samples, pImpl->sample_rate, new_rate);
 }
 
 } // namespace jp_edge_tts

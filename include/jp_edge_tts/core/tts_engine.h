@@ -14,7 +14,7 @@
 #ifndef JP_EDGE_TTS_ENGINE_H
 #define JP_EDGE_TTS_ENGINE_H
 
-#include "types.h"
+#include "jp_edge_tts/types.h"
 #include <memory>
 #include <future>
 #include <queue>

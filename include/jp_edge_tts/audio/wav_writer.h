@@ -17,6 +17,16 @@
 namespace jp_edge_tts {
 
 /**
+ * @brief WAV file format enumeration
+ */
+enum class WAVFormat {
+    PCM_16,      // 16-bit PCM
+    PCM_24,      // 24-bit PCM
+    PCM_32,      // 32-bit PCM
+    FLOAT_32     // 32-bit float
+};
+
+/**
  * @struct WavHeader
  * @brief WAV file header structure
  */
@@ -51,10 +61,12 @@ struct WavHeader {
 };
 
 /**
- * @class WavWriter
+ * @class WAVWriter
  * @brief Utility class for writing WAV files
  */
-class WavWriter {
+class WAVWriter {
+private:
+    class Impl;
 public:
     /**
      * @brief Write PCM16 samples to WAV file

@@ -8,10 +8,11 @@
  */
 
 #include "jp_edge_tts/tokenizer/ipa_tokenizer.h"
-#include "jp_edge_tts/utils/string_utils.h"
 #include <algorithm>
 #include <sstream>
 #include <cctype>
+#include <fstream>
+#include <iostream>
 
 namespace jp_edge_tts {
 
@@ -21,80 +22,84 @@ namespace jp_edge_tts {
 
 class IPATokenizer::Impl {
 public:
-    VocabManager vocab_manager;
-    bool is_initialized;
-    
-    // Special tokens
-    std::string pad_token;
-    std::string unk_token;
-    std::string bos_token;
-    std::string eos_token;
-    
-    // Token IDs
-    int pad_id;
-    int unk_id;
-    int bos_id;
-    int eos_id;
+    std::unordered_map<std::string, int> phoneme_to_id;
+    std::unordered_map<int, std::string> id_to_phoneme;
+    bool is_loaded;
 
-    Impl() : is_initialized(false),
-             pad_token("<pad>"),
-             unk_token("<unk>"),
-             bos_token("<s>"),
-             eos_token("</s>"),
-             pad_id(0),
-             unk_id(1),
-             bos_id(2),
-             eos_id(3) {}
+    // Special tokens
+    IPATokenizer::SpecialTokens special_tokens;
+
+    Impl() : is_loaded(false) {
+        // Set default special token IDs
+        special_tokens.pad_token = 0;
+        special_tokens.unk_token = 1;
+        special_tokens.start_token = 2;
+        special_tokens.end_token = 3;
+    }
 
     std::vector<std::string> SplitPhonemes(const std::string& phonemes) {
-        // Split phonemes by whitespace
         std::vector<std::string> result;
-        std::stringstream ss(phonemes);
-        std::string token;
-        
-        while (ss >> token) {
-            if (!token.empty()) {
-                result.push_back(token);
+        std::istringstream iss(phonemes);
+        std::string phoneme;
+
+        while (iss >> phoneme) {
+            if (!phoneme.empty()) {
+                result.push_back(phoneme);
             }
         }
-        
+
         return result;
     }
 
     std::string NormalizePhoneme(const std::string& phoneme) {
-        // Basic normalization for IPA symbols
+        // Basic normalization - trim whitespace and lowercase
         std::string normalized = phoneme;
-        
-        // Convert to lowercase for consistency
-        // Note: This is simplified - real IPA has complex Unicode
-        std::transform(normalized.begin(), normalized.end(),
-                      normalized.begin(), ::tolower);
-        
-        // Remove any surrounding whitespace
-        normalized = StringUtils::Trim(normalized);
-        
+
+        // Trim whitespace
+        auto start = normalized.find_first_not_of(" \t\r\n");
+        if (start == std::string::npos) return "";
+        auto end = normalized.find_last_not_of(" \t\r\n");
+        normalized = normalized.substr(start, end - start + 1);
+
         return normalized;
     }
 
-    std::vector<int> AddSpecialTokens(const std::vector<int>& tokens,
-                                      bool add_bos,
-                                      bool add_eos) {
-        std::vector<int> result;
-        
-        // Add beginning of sequence token
-        if (add_bos) {
-            result.push_back(bos_id);
+    bool LoadFromJSON(const std::string& json_data) {
+        // Very basic JSON parsing for phoneme vocabulary
+        // Expected format: {"phoneme1": id1, "phoneme2": id2, ...}
+
+        phoneme_to_id.clear();
+        id_to_phoneme.clear();
+
+        // Simple JSON parsing - find all key-value pairs
+        size_t pos = 0;
+        while ((pos = json_data.find("\"", pos)) != std::string::npos) {
+            size_t key_start = pos + 1;
+            size_t key_end = json_data.find("\"", key_start);
+            if (key_end == std::string::npos) break;
+
+            std::string key = json_data.substr(key_start, key_end - key_start);
+
+            // Find the colon and value
+            size_t colon = json_data.find(":", key_end);
+            if (colon == std::string::npos) break;
+
+            size_t value_start = json_data.find_first_of("0123456789", colon);
+            if (value_start == std::string::npos) break;
+
+            size_t value_end = json_data.find_first_not_of("0123456789", value_start);
+            if (value_end == std::string::npos) value_end = json_data.length();
+
+            int value = std::stoi(json_data.substr(value_start, value_end - value_start));
+
+            phoneme_to_id[key] = value;
+            id_to_phoneme[value] = key;
+
+            pos = value_end;
         }
-        
-        // Add main tokens
-        result.insert(result.end(), tokens.begin(), tokens.end());
-        
-        // Add end of sequence token
-        if (add_eos) {
-            result.push_back(eos_id);
-        }
-        
-        return result;
+
+        is_loaded = !phoneme_to_id.empty();
+        return is_loaded;
     }
 };
 
@@ -107,188 +112,169 @@ IPATokenizer::~IPATokenizer() = default;
 IPATokenizer::IPATokenizer(IPATokenizer&&) noexcept = default;
 IPATokenizer& IPATokenizer::operator=(IPATokenizer&&) noexcept = default;
 
-Status IPATokenizer::Initialize(const std::string& vocab_path) {
-    // Load vocabulary
-    Status status = pImpl->vocab_manager.LoadVocabulary(vocab_path);
-    if (status != Status::OK) {
-        return status;
+bool IPATokenizer::LoadVocabulary(const std::string& vocab_path) {
+    std::ifstream file(vocab_path);
+    if (!file.is_open()) {
+        return false;
     }
-    
-    // Verify special tokens exist in vocabulary
-    pImpl->pad_id = pImpl->vocab_manager.GetTokenId(pImpl->pad_token);
-    pImpl->unk_id = pImpl->vocab_manager.GetTokenId(pImpl->unk_token);
-    pImpl->bos_id = pImpl->vocab_manager.GetTokenId(pImpl->bos_token);
-    pImpl->eos_id = pImpl->vocab_manager.GetTokenId(pImpl->eos_token);
-    
-    // Use defaults if not found
-    if (pImpl->pad_id == -1) pImpl->pad_id = 0;
-    if (pImpl->unk_id == -1) pImpl->unk_id = 1;
-    if (pImpl->bos_id == -1) pImpl->bos_id = 2;
-    if (pImpl->eos_id == -1) pImpl->eos_id = 3;
-    
-    pImpl->is_initialized = true;
-    return Status::OK;
+
+    std::string content((std::istreambuf_iterator<char>(file)),
+                        std::istreambuf_iterator<char>());
+
+    return LoadVocabularyFromJSON(content);
 }
 
-std::vector<int> IPATokenizer::Tokenize(const std::string& phonemes) {
-    if (!pImpl->is_initialized) {
+bool IPATokenizer::LoadVocabularyFromJSON(const std::string& json_data) {
+    return pImpl->LoadFromJSON(json_data);
+}
+
+bool IPATokenizer::IsLoaded() const {
+    return pImpl->is_loaded;
+}
+
+std::vector<int> IPATokenizer::PhonemesToTokens(const std::string& phonemes) {
+    if (!pImpl->is_loaded) {
         return {};
     }
-    
-    // Split phonemes into individual tokens
+
     auto phoneme_list = pImpl->SplitPhonemes(phonemes);
-    
-    // Convert phonemes to token IDs
-    std::vector<int> tokens;
-    for (const auto& phoneme : phoneme_list) {
-        // Normalize the phoneme
-        std::string normalized = pImpl->NormalizePhoneme(phoneme);
-        
-        // Get token ID from vocabulary
-        int token_id = pImpl->vocab_manager.GetTokenId(normalized);
-        
-        // Use unknown token if not found
-        if (token_id == -1) {
-            token_id = pImpl->unk_id;
-        }
-        
-        tokens.push_back(token_id);
+    return PhonemesToTokens(phoneme_list);
+}
+
+std::vector<int> IPATokenizer::PhonemesToTokens(const std::vector<std::string>& phoneme_list) {
+    if (!pImpl->is_loaded) {
+        return {};
     }
-    
+
+    std::vector<int> tokens;
+    tokens.reserve(phoneme_list.size());
+
+    for (const auto& phoneme : phoneme_list) {
+        std::string normalized = pImpl->NormalizePhoneme(phoneme);
+
+        auto it = pImpl->phoneme_to_id.find(normalized);
+        if (it != pImpl->phoneme_to_id.end()) {
+            tokens.push_back(it->second);
+        } else {
+            tokens.push_back(pImpl->special_tokens.unk_token);
+        }
+    }
+
     return tokens;
 }
 
-std::vector<int> IPATokenizer::TokenizeWithSpecialTokens(
-    const std::string& phonemes,
-    bool add_bos,
-    bool add_eos) {
-    
-    // Get base tokens
-    auto tokens = Tokenize(phonemes);
-    
-    // Add special tokens
-    return pImpl->AddSpecialTokens(tokens, add_bos, add_eos);
-}
-
-std::string IPATokenizer::Detokenize(const std::vector<int>& tokens) {
-    if (!pImpl->is_initialized) {
+std::string IPATokenizer::TokensToPhonemes(const std::vector<int>& tokens) {
+    if (!pImpl->is_loaded) {
         return "";
     }
-    
+
     std::vector<std::string> phonemes;
-    
+    phonemes.reserve(tokens.size());
+
     for (int token_id : tokens) {
-        // Skip special tokens when detokenizing
-        if (token_id == pImpl->pad_id ||
-            token_id == pImpl->bos_id ||
-            token_id == pImpl->eos_id) {
-            continue;
-        }
-        
-        // Get phoneme from vocabulary
-        std::string phoneme = pImpl->vocab_manager.GetToken(token_id);
-        
-        // Skip unknown tokens
-        if (phoneme.empty() || phoneme == pImpl->unk_token) {
-            continue;
-        }
-        
-        phonemes.push_back(phoneme);
-    }
-    
-    // Join phonemes with spaces
-    return StringUtils::Join(phonemes, " ");
-}
-
-std::vector<std::vector<int>> IPATokenizer::BatchTokenize(
-    const std::vector<std::string>& phoneme_list,
-    bool add_special_tokens) {
-    
-    std::vector<std::vector<int>> batch;
-    
-    for (const auto& phonemes : phoneme_list) {
-        if (add_special_tokens) {
-            batch.push_back(TokenizeWithSpecialTokens(phonemes, true, true));
+        auto it = pImpl->id_to_phoneme.find(token_id);
+        if (it != pImpl->id_to_phoneme.end()) {
+            phonemes.push_back(it->second);
         } else {
-            batch.push_back(Tokenize(phonemes));
+            // Use unknown token representation
+            phonemes.push_back("<unk>");
         }
     }
-    
-    return batch;
+
+    // Join with spaces
+    std::ostringstream oss;
+    for (size_t i = 0; i < phonemes.size(); ++i) {
+        if (i > 0) oss << " ";
+        oss << phonemes[i];
+    }
+
+    return oss.str();
 }
 
-std::vector<std::vector<int>> IPATokenizer::PadBatch(
-    const std::vector<std::vector<int>>& batch,
-    size_t max_length,
-    bool pad_to_max) {
-    
-    if (batch.empty()) {
-        return batch;
+int IPATokenizer::GetTokenId(const std::string& phoneme) const {
+    if (!pImpl->is_loaded) {
+        return pImpl->special_tokens.unk_token;
     }
-    
-    // Find the maximum length in the batch
-    size_t batch_max = 0;
-    for (const auto& tokens : batch) {
-        batch_max = std::max(batch_max, tokens.size());
+
+    std::string normalized = pImpl->NormalizePhoneme(phoneme);
+    auto it = pImpl->phoneme_to_id.find(normalized);
+
+    if (it != pImpl->phoneme_to_id.end()) {
+        return it->second;
     }
-    
-    // Use provided max_length or batch max
-    size_t target_length = pad_to_max ? max_length : 
-                          (max_length > 0 ? std::min(max_length, batch_max) : batch_max);
-    
-    // Pad all sequences to target length
-    std::vector<std::vector<int>> padded;
-    for (const auto& tokens : batch) {
-        std::vector<int> padded_tokens = tokens;
-        
-        // Truncate if too long
-        if (padded_tokens.size() > target_length) {
-            padded_tokens.resize(target_length);
+
+    return pImpl->special_tokens.unk_token;
+}
+
+std::string IPATokenizer::GetPhoneme(int token_id) const {
+    if (!pImpl->is_loaded) {
+        return "";
+    }
+
+    auto it = pImpl->id_to_phoneme.find(token_id);
+    if (it != pImpl->id_to_phoneme.end()) {
+        return it->second;
+    }
+
+    return "";
+}
+
+size_t IPATokenizer::GetVocabularySize() const {
+    return pImpl->phoneme_to_id.size();
+}
+
+std::vector<std::string> IPATokenizer::GetPhonemes() const {
+    std::vector<std::string> phonemes;
+    phonemes.reserve(pImpl->phoneme_to_id.size());
+
+    for (const auto& pair : pImpl->phoneme_to_id) {
+        phonemes.push_back(pair.first);
+    }
+
+    std::sort(phonemes.begin(), phonemes.end());
+    return phonemes;
+}
+
+IPATokenizer::SpecialTokens IPATokenizer::GetSpecialTokens() const {
+    return pImpl->special_tokens;
+}
+
+std::vector<int> IPATokenizer::PadTokens(const std::vector<int>& tokens,
+                                         size_t target_length,
+                                         bool pad_left) {
+    if (tokens.size() >= target_length) {
+        return tokens;
+    }
+
+    std::vector<int> padded;
+    padded.reserve(target_length);
+
+    size_t padding_needed = target_length - tokens.size();
+
+    if (pad_left) {
+        // Pad on the left
+        for (size_t i = 0; i < padding_needed; ++i) {
+            padded.push_back(pImpl->special_tokens.pad_token);
         }
-        // Pad if too short
-        else if (padded_tokens.size() < target_length) {
-            size_t pad_count = target_length - padded_tokens.size();
-            for (size_t i = 0; i < pad_count; i++) {
-                padded_tokens.push_back(pImpl->pad_id);
-            }
+        padded.insert(padded.end(), tokens.begin(), tokens.end());
+    } else {
+        // Pad on the right
+        padded.insert(padded.end(), tokens.begin(), tokens.end());
+        for (size_t i = 0; i < padding_needed; ++i) {
+            padded.push_back(pImpl->special_tokens.pad_token);
         }
-        
-        padded.push_back(padded_tokens);
     }
-    
+
     return padded;
 }
 
-int IPATokenizer::GetPadTokenId() const {
-    return pImpl->pad_id;
-}
+std::vector<int> IPATokenizer::TruncateTokens(const std::vector<int>& tokens,
+                                              size_t max_length) {
+    if (tokens.size() <= max_length) {
+        return tokens;
+    }
 
-int IPATokenizer::GetUnkTokenId() const {
-    return pImpl->unk_id;
-}
-
-int IPATokenizer::GetBosTokenId() const {
-    return pImpl->bos_id;
-}
-
-int IPATokenizer::GetEosTokenId() const {
-    return pImpl->eos_id;
-}
-
-size_t IPATokenizer::GetVocabSize() const {
-    return pImpl->vocab_manager.GetVocabularySize();
-}
-
-bool IPATokenizer::IsInitialized() const {
-    return pImpl->is_initialized;
-}
-
-VocabManager& IPATokenizer::GetVocabManager() {
-    return pImpl->vocab_manager;
-}
-
-const VocabManager& IPATokenizer::GetVocabManager() const {
-    return pImpl->vocab_manager;
+    return std::vector<int>(tokens.begin(), tokens.begin() + max_length);
 }
 
 } // namespace jp_edge_tts

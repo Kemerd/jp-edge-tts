@@ -78,21 +78,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         add_compile_options(-fsanitize=address -fsanitize=undefined)
         add_link_options(-fsanitize=address -fsanitize=undefined)
     endif()
-endif()
-
-if(MSVC)
+elseif(MSVC)
     # MSVC-specific flags
     add_compile_options(/W4)
 
-    # Clear default flags to avoid conflicts
-    set(CMAKE_CXX_FLAGS_DEBUG "/Od /RTC1 /MDd")
-    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Ob2 /DNDEBUG /MD")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/O2 /Ob1 /DNDEBUG /MD")
-    set(CMAKE_CXX_FLAGS_MINSIZEREL "/O1 /Ob1 /DNDEBUG /MD")
-
-    # Link-time optimization for Release builds
+    # Optimization flags for Release builds
     if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_compile_options(/O2 /Ob2 /Oi /Ot /Oy /GL)
         add_link_options(/LTCG)
+    endif()
+
+    # Debug flags
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        add_compile_options(/Od /RTC1)
     endif()
 endif()
 

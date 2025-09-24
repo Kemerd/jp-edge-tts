@@ -7,6 +7,7 @@
 #include <optional>
 #include <chrono>
 #include <cstdint>
+#include <functional>
 
 namespace jp_edge_tts {
 
